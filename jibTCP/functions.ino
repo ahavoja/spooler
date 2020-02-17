@@ -3,7 +3,7 @@ void settings(){ // this function changes some settings of TMC2130
 	slew.begin(); // Initiate pins and registeries
 	slew.high_sense_R(1); // reference voltage for coil current sense resistors	1 = 0.18V			 0 = 0.32V
 	slew.hold_current(1); // 0-31 standstill current per motor coil
-	slew.run_current(8); // 0-31,		 0 = 30 mA per coil,		31 = 980 mA per coil
+	slew.run_current(4); // 0-31,		 0 = 30 mA per coil,		31 = 980 mA per coil
 	slew.power_down_delay(30); // how long to wait after movement stops before reducing to hold current 0-255 = 0-4 seconds
 	slew.hold_delay(3); // 0-15 how gradually it reduces to hold current. 0=fast change. 15=slow change.
 	slew.stealthChop(1); // Enable extremely quiet stepping
@@ -13,60 +13,18 @@ void settings(){ // this function changes some settings of TMC2130
 	slew.interpolate(1); // automatic 256 x microstepping
 	slew.double_edge_step(1); // step on both rising and falling edges
 	slew.chopper_mode(0); // 0=spreadCycle 1=constant off time
-
-	// trolleying driver settings
-	trolley.begin();
-	trolley.high_sense_R(1);
-	trolley.hold_current(1);
-	trolley.run_current(16);
-	trolley.power_down_delay(30);
-	trolley.hold_delay(3);
-	trolley.stealthChop(1);
-	trolley.standstill_mode(2);
-	trolley.stealth_autoscale(1);
-	trolley.microsteps(0);
-	trolley.interpolate(1);
-	trolley.double_edge_step(1);
-	trolley.chopper_mode(0);
-	trolley.diag1_stall(1);
-	trolley.sg_stall_value(5);
-
-	// hoisting driver settings
-	hook.begin();
-	hook.high_sense_R(1);
-	hook.hold_current(1);
-	hook.run_current(20); // increase this to be able to lift heavier loads
-	hook.power_down_delay(30);
-	hook.hold_delay(3);
-	hook.stealthChop(1);
-	hook.stealth_autoscale(1);
-	hook.standstill_mode(2);
-	hook.microsteps(0);
-	hook.interpolate(1);
-	hook.double_edge_step(1);
-	hook.chopper_mode(0);
-	hook.diag1_stall(1);
-	hook.sg_stall_value(0);
 }
 
 void silentMode(){
 	silent=1;
 	Serial.println(F("Silent mode"));
 	slew.stealth_max_speed(50); // switch stealthChop off if motor spins fast enough (meaning if time between two steps is less than this)
-	trolley.stealth_max_speed(10); // todo find how small this can be
-	hook.stealth_max_speed(10);
-	trolley.coolstep_min_speed(0); // set to zero so that it can run silently at higher speeds too
-	hook.coolstep_min_speed(0);
 }
 
 void fastMode(){
 	silent=0;
 	Serial.println(F("Fast mode"));
 	slew.stealth_max_speed(10000);
-	trolley.stealth_max_speed(10000);
-	hook.stealth_max_speed(10000);
-	trolley.coolstep_min_speed(200); // disable stallGuard when going too slow for it to work reliably
-	hook.coolstep_min_speed(400);
 }
 
 void stopMotors(){
@@ -74,9 +32,6 @@ void stopMotors(){
 	spd[0]=0; spd[1]=0; spd[2]=0;
 	setSpeed(0); setSpeed(1); setSpeed(2);
 	Serial.println(F("Stop motors"));
-	if(homing>0) readAccels(); // set accelerations back to normal if homing is stopped
-	homing=0; homeTrolley=0; homeSlew=0;
-	//posMax=2E9; posMin=-2E9; posTop=2E9;
 }
 
 // calculates new speed for motor and limits its acceleration
@@ -111,10 +66,8 @@ void setSpeed(byte motor){
 		unsigned long newKid=16000000UL/abs(spd[motor]); // how many CPU cycles to wait between steps
 		if(newKid>0xFFFF00) newKid=0xFFFF00; // why would we even try to step slower than this
 		cli();
-		if(homing!=4 && homeTrolley!=2 && homeTrolley!=4){
-			motOn[motor]=1;
-			kid[motor]=newKid;
-		}
+		motOn[motor]=1;
+		kid[motor]=newKid;
 		sei();
 	}
 }
@@ -148,47 +101,6 @@ inline void fox(unsigned long cycles){
 	//TCNT1 = 0; // reset counter. p115
 }
 
-void larsonScanner(){
-	static char pos = 0, dir = 1; // Position, direction of "eye"
- 
-	// Draw 5 pixels centered on pos.	setPixelColor() will clip any
-	// pixels off the ends of the strip, we don't need to watch for that.
-	if(receptionActive){
-		led.setPixelColor(pos - 2, 0x0000FF);
-		led.setPixelColor(pos - 1, 0x00FFFF);
-		led.setPixelColor(pos    , 0x00FF00);
-		led.setPixelColor(pos + 1, 0xFFFF00);
-		led.setPixelColor(pos + 2, 0xFF0000);
-	}else if(ethernetConnected){
-		led.setPixelColor(pos - 2, 0x001000);
-		led.setPixelColor(pos - 1, 0x008000);
-		led.setPixelColor(pos    , 0x00FF00); // Center pixel is brightest
-		led.setPixelColor(pos + 1, 0x008000);
-		led.setPixelColor(pos + 2, 0x001000);
-	}else{
-		led.setPixelColor(pos - 2, 0x100000); // Dark red
-		led.setPixelColor(pos - 1, 0x800000); // Medium red
-		led.setPixelColor(pos    , 0xFF0000); // Center pixel is brightest
-		led.setPixelColor(pos + 1, 0x800000); // Medium red
-		led.setPixelColor(pos + 2, 0x100000); // Dark red
-	}
-	led.show();
- 
-	// Rather than being sneaky and erasing just the tail pixel,
-	// it's easier to erase it all and draw a new one next time.
-	for(char j=-2; j<= 2; j++) led.setPixelColor(pos+j, 0);
- 
-	// Bounce off ends of strip
-	pos += dir;
-	if(pos < 0) {
-		pos = 1;
-		dir = -dir;
-	} else if(pos >= led.numPixels()) {
-		pos = led.numPixels() - 2;
-		dir = -dir;
-	}
-}
-
 // Unlike its Arduino counterpart, this does not wait that ADC is ready. It makes using analogRead() inside interrupt so much faster.
 int analogRead(byte pin){
 	if (pin >= 14) pin -= 14; // allow for channel or pin numbers
@@ -206,19 +118,15 @@ int analogRead(byte pin){
 
 // Read accelerations from memory
 void readAccels(){
-	if(homing==0) Serial.print(F("Accels:"));
+	Serial.print(F("Accels:"));
 	word accel;
 	for(byte i=0; i<3; i++){
 		EEPROM.get(4+i*2,accel);
 		acceleration[i]=accel/1000.;
-		if(homing==0){
-			Serial.print("  ");
-			Serial.print(accel); // in units of steps/(s^2)
-		}
+		Serial.print("  ");
+		Serial.print(accel); // in units of steps/(s^2)
 	}
-	decelerationTrol=sqrt(2000*acceleration[1]);
-	decelerationHook=sqrt(2000*acceleration[2]);
-	if(homing==0) Serial.println();
+	Serial.println();
 }
 
 /*Start byte bit structure:
@@ -239,18 +147,13 @@ void interpretByte(const byte wax){
 	static int newSpeed=0;
 	if(wax & 0b10000000){ // start byte
 		if(wax & 0b100000){ // no emergency stop
-			if(homing==0){ // dont start homing again if we are already homing
-				if(wax & 0b10000) homing=1;
-				else if((wax & 0b1000000) == 0) job=0; // speed command
-			}
+			if((wax & 0b1000000) == 0) job=0; // speed command
 		}else stopMotors(); // emergency stop
 		if(wax & 0b1000000) job=7; // acceleration setting
-		if(homing==0){
-			if(wax & 0b1000){
-				if(silent==0) silentMode();
-			}else{
-				if(silent==1) fastMode();
-			}
+		if(wax & 0b1000){
+			if(silent==0) silentMode();
+		}else{
+			if(silent==1) fastMode();
 		}
 		if(wax & 0b100) light=1;
 		else light=0;
@@ -292,7 +195,6 @@ void interpretByte(const byte wax){
 		else if(job==12){
 			newSpeed |= wax;
 			EEPROM.put(8,newSpeed);
-			if(homing==0) readAccels(); // don't change accelerations during homing
 		}
 		++job;
 	}
@@ -328,16 +230,7 @@ void setup() {
 	pinMode(8,INPUT_PULLUP); // diag1 trolley
 	pinMode(9,INPUT_PULLUP); // diag1 hook
 	fastMode();
-	led.begin();
 	readAccels();
-
-	// Ethernet stuff
-	Ethernet.init(10); // Ethernet shield CS pin
-	//EEPROM.update(0,4); // you can use this line to update crane ID
-	myID=EEPROM.read(0);
-	if(myID==1) led.updateLength(47); // because jib number one has more leds
-	mac[5]=myID; // unique MAC
-	myIP[3]=100+myID;
 }
 
 /*EEPROM map:

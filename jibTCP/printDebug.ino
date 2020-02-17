@@ -15,10 +15,7 @@ void printDebug()
 		}
 	}
 	
-	const int
-		stallGuardSlew = slew.DRV_STATUS() & 0x3FF,
-		stallGuardTrolley = trolley.DRV_STATUS() & 0x3FF,
-		stallGuardHook = hook.DRV_STATUS() & 0x3FF;
+	const int stallGuardSlew = slew.DRV_STATUS() & 0x3FF;
 		
 	const float Vin=analogRead(A7)*0.03812; // input voltage
 	static float VinOld=0;
@@ -35,12 +32,6 @@ void printDebug()
 		}
 	}
 
-	static byte homingOld=0;
-	if(homing != homingOld){
-		say=1;
-		homingOld=homing;
-	}
-
 	if(rat>0) say=1;
 	
 	if(say){
@@ -55,16 +46,8 @@ void printDebug()
 		}
 		Serial.print("  ");
 		Serial.print(stallGuardSlew, DEC);
-		Serial.print(",");
-		Serial.print(stallGuardTrolley, DEC);
-		Serial.print(",");
-		Serial.print(stallGuardHook, DEC);
 		Serial.print(",  ");
-		if(PINB & 1==0) Serial.print(F("trolley stalled, "));
-		if(PINB & 2==0) Serial.print(F("hook stalled, "));
 		Serial.print(Vin,1);
-		Serial.print(", ");
-		Serial.print(homingOld,DEC);
 		Serial.print(", ");
 		Serial.print(analogRead(A6));
 		if(rat>0){

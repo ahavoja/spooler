@@ -39,17 +39,8 @@
 
 // choose chip select pins for each stepper driver
 TMC2130Stepper slew = TMC2130Stepper(A0);
-TMC2130Stepper trolley = TMC2130Stepper(A1);
-TMC2130Stepper hook = TMC2130Stepper(A2);
-
-// led library
-#include <Adafruit_NeoPixel.h>
-Adafruit_NeoPixel led(23, A4, NEO_GRB + NEO_KHZ800); // led count, led pin
 
 #include <EEPROM.h> // for storing unique IP address for each arduino
-
-#include <Ethernet.h>
-EthernetClient client;
 
 // global variables
 volatile unsigned long
@@ -57,22 +48,10 @@ volatile unsigned long
 	boy[3]={0xFFFF00,0xFFFF00,0xFFFF00}; // CPU cycles left until the motor needs to be stepped again
 volatile bool motOn[3]={0,0,0}; // which motors are spinning
 volatile bool dir[3]={0,0,0}; // slew, trolley, hook direction
-volatile long
-	pos[3]={0,0,0}, // motor step positions
-	posMax=4000, posMin=-4000, posTop=30000;
-volatile byte homing=0, homeSlew=0, homeTrolley=0;
+volatile long pos[3]={0,0,0}; // motor step positions
 int spd[3]={0,0,0}, goal[3]={0,0,0};
-bool ethernetConnected=0, ethernetBegun=0, serialActive=1, receptionActive=1, light=0, silent, hookHitGround;
+bool serialActive=1, receptionActive=1, light=0, silent;
 String message, globalR_str;
 unsigned long now; // current time in loop()
 unsigned long timeReceived=0; // when was last byte received via USB or Ethernet
 float acceleration[3]; // stores slew, trolley, hook acceleration limits
-float decelerationTrol,decelerationHook; // how quick to decelerate before trolley hits edges
-byte myID; // crane number
-byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
-byte myIP[]= {192,168,10,105};
-const int myHeight[]={1481,1181,581,881}; // hook height from ground mm
-const byte scale=50; // real crane size relative to scale model
-const float latSite=60.224553, lonSite=24.790838; // site center point coordinates
-const int cranePosX[]={-450,350,433,-430}; // crane coordinates relative to minisite center mm
-const int cranePosY[]={600,600,-597,-594};
