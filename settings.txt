@@ -1,0 +1,16 @@
+IP_address=192.168.10.102
+
+#Acceleration in units of steps/(s^2). Range 0 to 16000.
+accel_slew=50
+accel_trol=80
+accel_hook=30
+
+#Speeds in units of steps/s. Range 0 to 8000.
+speed_slew=50,100,200,400,800,1600,3200,6400
+speed_trol=25,50,100,200,400,800,1600,3200
+speed_hook=25,50,100,200,400,800
+
+#Speeds for DualShock 4.
+speed_slew_pad=1000
+speed_trol_pad=500
+speed_hook_pad=300
