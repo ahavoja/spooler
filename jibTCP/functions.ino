@@ -28,53 +28,51 @@ void fastMode(){
 }
 
 void stopMotors(){
-	goal[0]=0; goal[1]=0; goal[2]=0;
-	spd[0]=0; spd[1]=0; spd[2]=0;
-	setSpeed(0); setSpeed(1); setSpeed(2);
+	goal=0;
+	spd=0;
+	setSpeed();
 	Serial.println(F("Stop motors"));
 }
 
 // calculates new speed for motor and limits its acceleration
-// call this function in every iteration of loop(), once for each motor
-// parameter: motor (0 or 1 or 2)
-void calcSpeed(byte motor){
-	static unsigned long viime[3]={now,now,now};
-	const byte tuokio=now-viime[motor];
-	const byte increment=tuokio*acceleration[motor];
+// call this function in every iteration of loop()
+void calcSpeed(){
+	static unsigned long viime=now;
+	const byte tuokio=now-viime;
+	const byte increment=tuokio*acceleration;
 	if(increment>0){
-		viime[motor]=now;
-		if(spd[motor]<goal[motor]){
-			if(increment<goal[motor]-spd[motor]) spd[motor]+=increment;
-			else spd[motor]=goal[motor];
+		viime=now;
+		if(spd<goal){
+			if(increment<goal-spd) spd+=increment;
+			else spd=goal;
 		}
-		else if(spd[motor]>goal[motor]){
-			if(increment<spd[motor]-goal[motor]) spd[motor]-=increment;
-			else spd[motor]=goal[motor];
+		else if(spd>goal){
+			if(increment<spd-goal) spd-=increment;
+			else spd=goal;
 		}
 	}
 }
 
 // changes motor speed
-// parameter: motor (0 or 1 or 2)
-void setSpeed(byte motor){
-	if (spd[motor]==0){
+void setSpeed(){
+	if (spd==0){
 		cli();
-		motOn[motor]=0; // dont step the motor
-		kid[motor]=0xFFFF00; // longest possible step period
+		motOn=0; // dont step the motor
+		kid=0xFFFF00; // longest possible step period
 		sei();
 	}else{
-		unsigned long newKid=16000000UL/abs(spd[motor]); // how many CPU cycles to wait between steps
+		unsigned long newKid=16000000UL/abs(spd); // how many CPU cycles to wait between steps
 		if(newKid>0xFFFF00) newKid=0xFFFF00; // why would we even try to step slower than this
 		cli();
-		motOn[motor]=1;
-		kid[motor]=newKid;
+		motOn=1;
+		kid=newKid;
 		sei();
 	}
 }
 
 // function to set timer1 period. Stolen from https://www.pjrc.com/teensy/td_libs_TimerOne.html
 inline void fox(unsigned long cycles){
-	if(cycles<1200) cycles=1200; // minimum cycles, cuz ISR takes some time too
+	if(cycles<1100) cycles=1100; // minimum cycles, cuz ISR takes some time too
 	byte clockSelectBits;
 	word period;
 	if (cycles < 0x10000) {
@@ -118,14 +116,11 @@ int analogRead(byte pin){
 
 // Read accelerations from memory
 void readAccels(){
-	Serial.print(F("Accels:"));
+	Serial.print(F("Accel: "));
 	word accel;
-	for(byte i=0; i<3; i++){
-		EEPROM.get(4+i*2,accel);
-		acceleration[i]=accel/1000.;
-		Serial.print("  ");
-		Serial.print(accel); // in units of steps/(s^2)
-	}
+	EEPROM.get(4,accel);
+	acceleration=accel/1000.;
+	Serial.print(accel); // in units of steps/(s^2)
 	Serial.println();
 }
 
@@ -136,8 +131,8 @@ void readAccels(){
 *0  1 to start homing
 *0  for fast mode, 1 for silent mode
 *0  1 for illumination
-*0
-*0
+*0  15th bit of speed command, when 0th is LSB
+*0  14th bit of speed command
 */
 
 // Commands from USB and Ethernet are passed to this function, which then adjusts motor speeds and settings accordingly
@@ -147,7 +142,10 @@ void interpretByte(const byte wax){
 	static int newSpeed=0;
 	if(wax & 0b10000000){ // start byte
 		if(wax & 0b100000){ // no emergency stop
-			if((wax & 0b1000000) == 0) job=0; // speed command
+			if((wax & 0b1000000) == 0){ // speed command
+				newSpeed=(wax&0b11)<<14;
+				job=0;
+			}
 		}else stopMotors(); // emergency stop
 		if(wax & 0b1000000) job=7; // acceleration setting
 		if(wax & 0b1000){
@@ -155,80 +153,34 @@ void interpretByte(const byte wax){
 		}else{
 			if(silent==1) fastMode();
 		}
-		if(wax & 0b100) light=1;
-		else light=0;
 	}
-	else if(job<6){ // speed command
+	else if(job<2){ // speed command
 		if(job==0){
-			newSpeed=wax<<7;
-			if(wax & 0b01000000) newSpeed |= 0b1100000000000000;
+			newSpeed |= wax<<7;
 		}else if(job==1){
 			newSpeed |= wax;
-			goal[0]=newSpeed;
-		}else if(job==2){
-			newSpeed=wax<<7;
-			if(wax & 0b01000000) newSpeed |= 0b1100000000000000;
-		}else if(job==3){
-			newSpeed |= wax;
-			goal[1]=-newSpeed;
-		}else if(job==4){
-			newSpeed=wax<<7;
-			if(wax & 0b01000000) newSpeed |= 0b1100000000000000;
-		}else if(job==5){
-			newSpeed |= wax;
-			goal[2]=newSpeed;
+			goal=newSpeed;
 		}
 		++job;
 	}
-	else if(job>6 && job<13){ // acceleration setting
+	else if(job>6 && job<9){ // acceleration setting
 		if(job==7) newSpeed=wax<<7;
 		else if(job==8){
 			newSpeed |= wax;
 			EEPROM.put(4,newSpeed);
-		}
-		if(job==9) newSpeed=wax<<7;
-		else if(job==10){
-			newSpeed |= wax;
-			EEPROM.put(6,newSpeed);
-		}
-		if(job==11) newSpeed=wax<<7;
-		else if(job==12){
-			newSpeed |= wax;
-			EEPROM.put(8,newSpeed);
+			readAccels();
 		}
 		++job;
 	}
 }
 
-void coordinates(const float local, const float site){
-	float globalL=((int)(site*100))/100.0;
-	float globalR=(site-globalL)+local;
-	if(local+site<0){
-		message+='-';
-		if(globalR>0){
-			globalL+=0.01;
-			globalR-=0.01;
-		}
-	}
-	else if(globalR<0){
-		globalL-=0.01;
-		globalR+=0.01;
-	}
-	message+=String(fabsf(globalL),2);
-	globalR_str=String(globalR,8);
-	message+=globalR_str.substring(globalR_str.indexOf('.')+3);
-}
-
 void setup() {
-	DDRD |= 0b01110000; // step pins outputs
+	DDRD |= 0b00010000; // step pins outputs
 	Serial.begin(250000); // Set baud rate in serial monitor
 	// let's enable timer1 to time the step pulses. See p113 here https://www.sparkfun.com/datasheets/Components/SMD/ATMega328.pdf
 	TCCR1A=B00000000; //p134
 	TIMSK1=B00100001; //p139
 	fox(1000);
-	pinMode(A3,INPUT_PULLUP); // slack detector
-	pinMode(8,INPUT_PULLUP); // diag1 trolley
-	pinMode(9,INPUT_PULLUP); // diag1 hook
 	fastMode();
 	readAccels();
 }

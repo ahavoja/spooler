@@ -1,22 +1,20 @@
 void printDebug()
 {
 	bool say=0;
-	//Serial.print(analogRead(A7)); // print hall sensor readings
-	
-	long positron[3];
-	static long positronOld[3]={0,0,0};
-	for(byte i=0; i<3; i++){ // copy motor positions to buffer
-		cli();
-		positron[i]=pos[i];
-		sei();
-		if (positron[i] != positronOld[i]){
-			say=1;
-			positronOld[i]=positron[i];
-		}
+
+	long positron;
+	static long positronOld=0;
+	// copy motor position to buffer
+	cli();
+	positron=pos;
+	sei();
+	if (positron != positronOld){
+		say=1;
+		positronOld=positron;
 	}
-	
+
 	const int stallGuardSlew = slew.DRV_STATUS() & 0x3FF;
-		
+
 	const float Vin=analogRead(A7)*0.03812; // input voltage
 	static float VinOld=0;
 	if(Vin < VinOld-0.3 || Vin > VinOld+0.3){ // hysteresis to not print voltage ripple. 0.3 works with 1 µF and 68 kΩ
@@ -24,32 +22,22 @@ void printDebug()
 		VinOld=Vin;
 	}
 
-	static char spdOld[3]={0,0,0};
-	for(byte i=0; i<3; i++){
-		if(spd[i] != spdOld[i]){
-			say=1;
-			spdOld[i]=spd[i];
-		}
+	static char spdOld=0;
+	if(spd != spdOld){
+		say=1;
+		spdOld=spd;
 	}
 
 	if(rat>0) say=1;
-	
+
 	if(say){
-		for(byte i=0; i<3; i++){ // print motor positions
-			Serial.print(positron[i]);
-			Serial.print(",");
-		}
-		Serial.print("  ");
-		for(byte i=0; i<3; i++){ // print motor speeds
-			Serial.print(spd[i],DEC);
-			Serial.print(",");
-		}
-		Serial.print("  ");
+		Serial.print(positron);
+		Serial.print(",  ");
+		Serial.print(spd,DEC);
+		Serial.print(",  ");
 		Serial.print(stallGuardSlew, DEC);
 		Serial.print(",  ");
 		Serial.print(Vin,1);
-		Serial.print(", ");
-		Serial.print(analogRead(A6));
 		if(rat>0){
 			Serial.print(F(", timer1 overflow "));
 			Serial.print(rat);

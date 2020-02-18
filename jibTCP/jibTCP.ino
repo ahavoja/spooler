@@ -1,14 +1,8 @@
-// This code reads commands from serial port (USB wire) or W5500 ethernet shield and controls 3 stepper motors via TMC2130 drivers.
+// This code reads commands from serial port (USB wire) and controls a stepper motor via TMC2130 driver.
 // This code runs on atmega 328p microcontroller (Arduino Uno or Nano)
-/* todo:
- * jerk limit?
- * adjust sg_stall_value based on input voltage
- * POWER & TORQUE:
-	 * adjust setCurrent, power_down_delay, microsteps etc.
-	 * enable coolStep for power savings and less heating
-	 * high torque mode for heavy lifting (and homing?), low torque for power savings
-	 * use stallGuard value to limit speed to prevent motors stalling
- * ISR is not sending step pulses perfectly evenly when spinning many motors at the same time
+/*todo:
+* millis or something causes jitter in motor movement every second
+* receive speed commands larger than 8000
 */
 
 // TMC2130 pin connections
@@ -44,14 +38,13 @@ TMC2130Stepper slew = TMC2130Stepper(A0);
 
 // global variables
 volatile unsigned long
-	kid[3]={0xFFFF00,0xFFFF00,0xFFFF00}, // CPU cycles to wait between steps for each motor
-	boy[3]={0xFFFF00,0xFFFF00,0xFFFF00}; // CPU cycles left until the motor needs to be stepped again
-volatile bool motOn[3]={0,0,0}; // which motors are spinning
-volatile bool dir[3]={0,0,0}; // slew, trolley, hook direction
-volatile long pos[3]={0,0,0}; // motor step positions
-int spd[3]={0,0,0}, goal[3]={0,0,0};
-bool serialActive=1, receptionActive=1, light=0, silent;
-String message, globalR_str;
+	kid=0xFFFF00, // CPU cycles to wait between steps for motor
+	boy=0xFFFF00; // CPU cycles left until the motor needs to be stepped again
+volatile bool motOn=0; // is the motor spinning
+volatile bool dir=0; // motor direction
+volatile long pos=0; // motor step position
+int spd=0, goal=0;
+bool silent;
 unsigned long now; // current time in loop()
-unsigned long timeReceived=0; // when was last byte received via USB or Ethernet
-float acceleration[3]; // stores slew, trolley, hook acceleration limits
+unsigned long timeReceived=0; // when was last byte received via USB
+float acceleration; // stores slew, trolley, hook acceleration limits
